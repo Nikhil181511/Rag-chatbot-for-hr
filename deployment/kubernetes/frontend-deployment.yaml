@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hr-rag-frontend
+  namespace: hr-rag
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hr-rag-frontend
+  template:
+    metadata:
+      labels:
+        app: hr-rag-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: hr-rag-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hr-rag-frontend
+  namespace: hr-rag
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: hr-rag-frontend

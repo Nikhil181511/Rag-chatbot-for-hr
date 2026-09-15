@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: hr-rag-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-raguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-hr_rag_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser} -d ${POSTGRES_DB:-hr_rag_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hr-rag-backend
+    restart: unless-stopped
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-raguser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ragpassword}
+      - POSTGRES_DB=${POSTGRES_DB:-hr_rag_db}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - RERANKER_PROVIDER=${RERANKER_PROVIDER:-bge}
+      - COHERE_API_KEY=${COHERE_API_KEY:-}
+      - VECTOR_STORE=${VECTOR_STORE:-postgres}
+      - DENSE_TOP_K=${DENSE_TOP_K:-30}
+      - SPARSE_TOP_K=${SPARSE_TOP_K:-30}
+      - FUSION_TOP_K=${FUSION_TOP_K:-50}
+      - RERANK_TOP_K=${RERANK_TOP_K:-10}
+      - FINAL_CONTEXT_CHUNKS=${FINAL_CONTEXT_CHUNKS:-5}
+      - MAX_RETRIEVAL_RETRIES=${MAX_RETRIEVAL_RETRIES:-2}
+      - MAX_HISTORY_MESSAGES=${MAX_HISTORY_MESSAGES:-20}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-hr-rag-chatbot}
+      - MCP_ENABLED=${MCP_ENABLED:-false}
+      - UPLOAD_DIR=/app/storage/uploads
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage/uploads:/app/storage/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hr-rag-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

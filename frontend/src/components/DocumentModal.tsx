@@ -1,0 +1,172 @@
+import React, { useRef } from 'react';
+import { X, UploadCloud, File, Trash2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { DocumentItem } from '../types';
+
+interface DocumentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  documents: DocumentItem[];
+  isUploading: boolean;
+  onUpload: (files: FileList) => void;
+  onDelete: (id: string) => void;
+}
+
+export const DocumentModal: React.FC<DocumentModalProps> = ({
+  isOpen,
+  onClose,
+  documents,
+  isUploading,
+  onUpload,
+  onDelete,
+}) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (!isOpen) return null;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      onUpload(e.target.files);
+    }
+  };
+
+  const getStatusBadge = (status: DocumentItem['status']) => {
+    switch (status) {
+      case 'READY':
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-emerald)', fontSize: '0.78rem' }}>
+            <CheckCircle2 size={13} /> Ready
+          </span>
+        );
+      case 'PROCESSING':
+      case 'INDEXING':
+      case 'UPLOADING':
+      case 'PENDING':
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', fontSize: '0.78rem' }}>
+            <Clock size={13} /> {status}
+          </span>
+        );
+      case 'FAILED':
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-rose)', fontSize: '0.78rem' }}>
+            <AlertTriangle size={13} /> Failed
+          </span>
+        );
+      default:
+        return <span>{status}</span>;
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 600 }}>HR Knowledge Base Documents</h2>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+              Upload policies, benefits guides, onboarding checklists (PDF, DOCX, XLSX, TXT, MD, CSV)
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Upload Dropzone */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              border: '2px dashed var(--border-color)',
+              borderRadius: '12px',
+              padding: '24px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              background: 'rgba(255, 255, 255, 0.02)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              multiple
+              accept=".pdf,.docx,.txt,.md,.xlsx,.xls,.csv"
+              style={{ display: 'none' }}
+            />
+            <UploadCloud size={36} style={{ color: '#818CF8', margin: '0 auto 12px auto' }} />
+            <div style={{ fontWeight: 500, fontSize: '0.95rem' }}>
+              {isUploading ? 'Uploading & Indexing files...' : 'Click to select HR documents'}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+              Supports PDF, Word (.docx), Excel (.xlsx), CSV, Text (.txt, .md) up to 50MB
+            </div>
+          </div>
+
+          {/* Documents Table / List */}
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '12px' }}>
+              Indexed Documents ({documents.length})
+            </div>
+
+            {documents.length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.88rem' }}>
+                No documents uploaded yet. Upload your first HR handbook or policy file above.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '12px 16px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <File size={20} color="#818CF8" />
+                      <div>
+                        <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{doc.file_name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', gap: '10px', marginTop: '2px' }}>
+                          <span>{(doc.file_size / 1024).toFixed(1)} KB</span>
+                          <span>•</span>
+                          <span>{doc.chunk_count} Chunks</span>
+                          {doc.document_category && (
+                            <>
+                              <span>•</span>
+                              <span style={{ color: '#A5B4FC' }}>{doc.document_category}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      {getStatusBadge(doc.status)}
+                      <button
+                        onClick={() => onDelete(doc.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-dim)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

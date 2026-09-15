@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hr-rag-backend
+  namespace: hr-rag
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hr-rag-backend
+  template:
+    metadata:
+      labels:
+        app: hr-rag-backend
+    spec:
+      containers:
+        - name: backend
+          image: hr-rag-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: hr-rag-config
+            - secretRef:
+                name: hr-rag-secret
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hr-rag-backend
+  namespace: hr-rag
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: hr-rag-backend

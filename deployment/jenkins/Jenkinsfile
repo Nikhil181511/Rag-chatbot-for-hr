@@ -1,0 +1,103 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = 'registry.company.internal'
+        APP_NAME = 'hr-rag'
+        GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Lint & Type Check') {
+            parallel {
+                stage('Backend Lint') {
+                    steps {
+                        sh '''
+                            cd backend
+                            python -m venv .venv
+                            . .venv/bin/activate
+                            pip install ruff mypy
+                            ruff check .
+                            mypy app/
+                        '''
+                    }
+                }
+                stage('Frontend Lint') {
+                    steps {
+                        sh '''
+                            cd frontend
+                            npm ci
+                            npm run lint
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                    chmod +x deployment/jenkins/test.sh
+                    ./deployment/jenkins/test.sh
+                '''
+            }
+        }
+
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Backend') {
+                    steps {
+                        sh '''
+                            docker build -t ${DOCKER_REGISTRY}/${APP_NAME}-backend:${GIT_COMMIT_SHORT} -f backend/Dockerfile backend/
+                            docker tag ${DOCKER_REGISTRY}/${APP_NAME}-backend:${GIT_COMMIT_SHORT} ${DOCKER_REGISTRY}/${APP_NAME}-backend:latest
+                        '''
+                    }
+                }
+                stage('Build Frontend') {
+                    steps {
+                        sh '''
+                            docker build -t ${DOCKER_REGISTRY}/${APP_NAME}-frontend:${GIT_COMMIT_SHORT} -f frontend/Dockerfile frontend/
+                            docker tag ${DOCKER_REGISTRY}/${APP_NAME}-frontend:${GIT_COMMIT_SHORT} ${DOCKER_REGISTRY}/${APP_NAME}-frontend:latest
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Staging') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh '''
+                    kubectl apply -f deployment/kubernetes/namespace.yaml
+                    kubectl apply -f deployment/kubernetes/configmap.yaml
+                    kubectl apply -f deployment/kubernetes/postgres.yaml
+                    kubectl apply -f deployment/kubernetes/backend-deployment.yaml
+                    kubectl apply -f deployment/kubernetes/frontend-deployment.yaml
+                    kubectl apply -f deployment/kubernetes/ingress.yaml
+                    kubectl rollout status deployment/hr-rag-backend -n hr-rag --timeout=120s
+                    kubectl rollout status deployment/hr-rag-frontend -n hr-rag --timeout=60s
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "CI/CD Pipeline succeeded for commit ${GIT_COMMIT_SHORT}"
+        }
+        failure {
+            echo "CI/CD Pipeline failed!"
+        }
+    }
+}
