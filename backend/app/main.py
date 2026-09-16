@@ -30,6 +30,11 @@ async def lifespan(app: FastAPI):
         embedding_provider=settings.EMBEDDING_PROVIDER,
         reranker_provider=settings.RERANKER_PROVIDER,
     )
+    try:
+        from app.init_db import init_tables
+        await init_tables()
+    except Exception as e:
+        logger.warning("Could not auto-initialize tables on startup", error=str(e))
     yield
     # Shutdown
     logger.info("Application shutting down")
