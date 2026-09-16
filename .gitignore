@@ -70,3 +70,11 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Notes and Specifications
+about.md
+info.txt
+command.txt
+specs/
+.agents/
+.specify/
