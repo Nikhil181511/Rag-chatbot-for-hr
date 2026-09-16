@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, FileText, Sparkles } from 'lucide-react';
+import { Bot, FileText } from 'lucide-react';
 
 interface HeaderProps {
   onOpenDocs: () => void;

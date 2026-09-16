@@ -5,7 +5,7 @@ echo "=== Running Backend Unit and Integration Tests ==="
 cd backend
 python3 -m venv .venv || true
 source .venv/bin/activate || source .venv/Scripts/activate || true
-pip install pytest pytest-cov || true
+pip install pytest pytest-cov pytest-asyncio || true
 pytest tests/unit/ -v || true
 
 echo "=== Running Frontend Build & Typechecks ==="
