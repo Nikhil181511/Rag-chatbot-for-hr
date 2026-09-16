@@ -68,9 +68,6 @@ pipeline {
         }
 
         stage('Deploy to Staging') {
-            when {
-                branch 'main'
-            }
             steps {
                 sh '''
                     kubectl apply -f deployment/kubernetes/namespace.yaml
