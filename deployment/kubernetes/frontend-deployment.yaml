@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: hr-rag-frontend:latest
+          image: hr-rag-frontend:v1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
