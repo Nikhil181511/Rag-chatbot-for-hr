@@ -70,10 +70,9 @@ pipeline {
         stage('Deploy to Staging') {
             steps {
                 sh '''
-                    mkdir -p ~/.kube || true
                     if [ -f /var/jenkins_home/.kube/config ]; then
-                        sed 's|127.0.0.1|host.docker.internal|g; s|https://kubernetes.docker.internal:6443|https://host.docker.internal:6443|g' /var/jenkins_home/.kube/config > ~/.kube/config
-                        export KUBECONFIG=~/.kube/config
+                        sed 's|127.0.0.1|host.docker.internal|g; s|https://kubernetes.docker.internal:6443|https://host.docker.internal:6443|g' /var/jenkins_home/.kube/config > /tmp/kubeconfig
+                        export KUBECONFIG=/tmp/kubeconfig
                     fi
                     kubectl apply -f deployment/kubernetes/namespace.yaml --insecure-skip-tls-verify=true
                     kubectl apply -f deployment/kubernetes/configmap.yaml --insecure-skip-tls-verify=true
