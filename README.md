@@ -464,13 +464,3 @@ alembic downgrade -1                              # Roll back one migration
 ```
 
 ---
-
-## 📄 License
-
-This project is licensed under the **MIT License**.
-
----
-
-<p align="center">
-  Built with ❤️ by <a href="https://github.com/Nikhil181511">Nikhil Savita</a>
-</p>
