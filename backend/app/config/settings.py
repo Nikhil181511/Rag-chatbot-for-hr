@@ -25,18 +25,18 @@ class Settings(BaseSettings):
 
     # LLM Settings (supports "gemini", "openai", "azure_openai", "anthropic", "local")
     LLM_PROVIDER: Literal["openai", "gemini", "azure_openai", "anthropic", "local"] = "gemini"
-    LLM_MODEL: str = "gemini-1.5-flash"
+    LLM_MODEL: str = "gemini-2.5-flash"
     LLM_API_KEY: str = Field(default="", description="API key for LLM provider (OpenAI / Gemini / Anthropic)")
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key")
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
     # Embedding Settings
     EMBEDDING_PROVIDER: Literal["openai", "gemini", "huggingface", "azure_openai"] = "openai"
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_MODEL: str = "gemini-embedding-002"
     EMBEDDING_DIMENSION: int = 1536
 
     # Reranker Settings
-    RERANKER_PROVIDER: Literal["bge", "cohere", "none"] = "bge"
+    RERANKER_PROVIDER: Literal["bge", "cohere", "none"] = "none"
     BGE_MODEL_NAME: str = "BAAI/bge-reranker-v2-m3"
     COHERE_API_KEY: str = Field(default="", description="Cohere API key for reranker")
 

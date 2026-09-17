@@ -1,4 +1,4 @@
-﻿# 🤖 HR Knowledge Assistant — RAG Chatbot
+# 🤖 HR Knowledge Assistant — RAG Chatbot
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.12-blue?logo=python" />
@@ -40,7 +40,7 @@
 | 🧠 **Agentic RAG Pipeline** | LangGraph state machine: intent classification → retrieval → grading → self-correction → generation |
 | 📄 **Multi-format Ingestion** | PDF, DOCX, XLSX, TXT, MD, CSV with table and structure preservation |
 | 🛡️ **HR Guardrails** | Anti-prompt injection, salary PII redaction, domain enforcement |
-| 🎯 **Reranking** | BGE-reranker-v2-m3 or Cohere reranker for top-K precision |
+| 🎯 **Reranking** | Optional (configurable: none / BGE / Cohere; defaults to `none` for fast latency) |
 | 📊 **Hallucination Checks** | Faithfulness scoring and answer relevance validation before response |
 | 💬 **Streaming UI** | React 18 + Vite + Server-Sent Events (SSE) streaming chat |
 | 📌 **Citations** | Source citations with document name, page, and confidence badges |
@@ -68,17 +68,18 @@
 │  ┌──────▼────────────────▼──────────────────────────────────┐   │
 │  │              Hybrid Retrieval Engine                      │   │
 │  │  Dense Search (pgvector) + Sparse (tsvector BM25)        │   │
-│  │      Reciprocal Rank Fusion  +  BGE Reranker             │   │
+│  │      Reciprocal Rank Fusion (RRF)                        │   │
 │  └──────────────────────┬───────────────────────────────────┘   │
 └─────────────────────────│───────────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────────┐
 │         PostgreSQL 16 + pgvector Extension                      │
-│   document_chunks table  │  embeddings (768-d / 1536-d vectors) │
+│   document_chunks table  │  1536-dimensional float vectors      │
 └─────────────────────────────────────────────────────────────────┘
 
-         LLM: Google Gemini 1.5 Flash (via Gemini API)
-         Embeddings: Gemini text-embedding-004
+         LLM: Google Gemini 2.5 Flash
+         Embeddings: Google gemini-embedding-002 (1536 dimensions)
+         Reranker: None (direct Reciprocal Rank Fusion)
 ```
 
 ### LangGraph RAG Workflow
@@ -125,12 +126,13 @@ Query Rewriting ──► Intent Classification
 | Layer | Technology |
 |---|---|
 | API Framework | FastAPI 0.111+ with async support |
-| LLM / Embeddings | Google Gemini 1.5 Flash / text-embedding-004 |
+| LLM | Google Gemini 2.5 Flash |
+| Embeddings | Google gemini-embedding-002 (1536 dimensions) |
 | Agent Orchestration | LangGraph, LangChain |
 | Vector Database | PostgreSQL 16 + pgvector extension |
 | ORM | SQLAlchemy 2.0 (async) + asyncpg |
 | Migrations | Alembic |
-| Reranker | BGE-reranker-v2-m3 (sentence-transformers) / Cohere |
+| Reranker | Optional (`none` / BGE-reranker-v2-m3 / Cohere) |
 | Document Parsing | pdfplumber, python-docx, openpyxl, pandas |
 | Logging | structlog (structured JSON logs) |
 | Tracing | LangSmith (optional) |
@@ -288,7 +290,7 @@ Copy `.env.example` to `.env` and configure the key variables:
 ```env
 # LLM
 LLM_PROVIDER=gemini
-LLM_MODEL=gemini-1.5-flash
+LLM_MODEL=gemini-2.5-flash
 GEMINI_API_KEY=your_gemini_api_key_here
 
 # Database
@@ -300,10 +302,11 @@ POSTGRES_DB=hr_rag_db
 
 # Embedding
 EMBEDDING_PROVIDER=gemini          # gemini | openai
-EMBEDDING_MODEL=text-embedding-004
+EMBEDDING_MODEL=gemini-embedding-002
+EMBEDDING_DIMENSION=1536
 
 # Reranker
-RERANKER_PROVIDER=bge              # bge | cohere | none
+RERANKER_PROVIDER=none             # none | bge | cohere
 
 # Retrieval tuning
 DENSE_TOP_K=30
