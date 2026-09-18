@@ -37,6 +37,7 @@ class RAGState(TypedDict, total=False):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    node_durations: Dict[str, float]
     
     # Final Output
     final_answer: str

@@ -51,6 +51,9 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
     draft_answer = ""
     api_key = settings.effective_llm_key
 
+    import time
+    llm_start = time.time()
+
     if api_key:
         try:
             if settings.LLM_PROVIDER == "gemini":
@@ -94,9 +97,14 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
         completion_tokens = len(draft_answer) // 4
         total_tokens = prompt_tokens + completion_tokens
 
+    llm_duration = round(time.time() - llm_start, 3)
+    existing_durations = dict(state.get("node_durations") or {})
+    existing_durations["generate_draft_answer"] = llm_duration
+
     return {
         "draft_answer": draft_answer,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
+        "node_durations": existing_durations,
     }

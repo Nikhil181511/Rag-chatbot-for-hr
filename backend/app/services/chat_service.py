@@ -100,6 +100,8 @@ class ChatService:
                 comp_tok = final_state.get("completion_tokens", 0)
                 tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
 
+                durations = final_state.get("node_durations", {})
+
                 # 1. Intent & Routing Span
                 intent_span = lf_root.start_observation(
                     name="classify_intent",
@@ -115,11 +117,13 @@ class ChatService:
                 )
                 intent_span.end()
 
-                # 2. Retrieval & Reranking Span (with all candidate chunks reviewed vs selected)
+                # 2. Retrieval & Reranking Span
+                retrieval_time = durations.get("retrieve_candidates", 0.0)
                 retrieval_span = lf_root.start_observation(
                     name="retrieve_and_rerank",
                     input={"query": req.query, "filters": final_state.get("filters", {})},
                     metadata={
+                        "duration_seconds": retrieval_time,
                         "retrieval_quality": final_state.get("retrieval_quality", "sufficient"),
                         "retrieved_total": len(retrieved),
                         "selected_total": len(selected),
@@ -128,6 +132,7 @@ class ChatService:
                 )
                 retrieval_span.update(
                     output={
+                        "latency_sec": retrieval_time,
                         "retrieved_count": len(retrieved),
                         "selected_count": len(selected),
                         "retrieved_preview": [
@@ -156,10 +161,12 @@ class ChatService:
                 retrieval_span.end()
 
                 # 3. LLM Generation Span
+                llm_time = durations.get("generate_draft_answer", 0.0)
                 gen_span = lf_root.start_observation(
                     name="generate_draft_answer",
                     input={"query": req.query, "context_chunks_passed": len(selected)},
                     metadata={
+                        "duration_seconds": llm_time,
                         "model": settings.LLM_MODEL,
                         "groundedness": final_state.get("groundedness_result"),
                         "usage": {
@@ -172,6 +179,7 @@ class ChatService:
                 gen_span.update(
                     output=final_state.get("draft_answer", ""),
                     metadata={
+                        "latency_sec": llm_time,
                         "prompt_tokens": prompt_tok,
                         "completion_tokens": comp_tok,
                         "total_tokens": tot_tok,
@@ -197,13 +205,18 @@ class ChatService:
                 )
                 guard_span.end()
 
-                # 5. Update Root Trace
+                # 5. Update Root Trace with full breakdown
                 lf_root.update(
                     output={
                         "answer": answer,
                         "citations_count": len(citations_data),
                         "status": status_val,
-                        "latency_ms": total_latency_ms,
+                        "latency_breakdown": {
+                            "total_sec": round(total_latency_ms / 1000, 2),
+                            "llm_generation_sec": llm_time,
+                            "retrieval_sec": retrieval_time,
+                            "streaming_overhead_sec": round(max(0, (total_latency_ms / 1000) - llm_time - retrieval_time), 2),
+                        },
                         "chunks_retrieved": len(retrieved),
                         "chunks_selected": len(selected),
                         "tokens": {
@@ -362,11 +375,16 @@ class ChatService:
                     )
                     intent_span.end()
 
-                    # 2. Retrieval & Reranking Span (with all candidate chunks reviewed vs selected)
+                    durations = final_state.get("node_durations", {})
+                    retrieval_time = durations.get("retrieve_candidates", 0.0)
+                    llm_time = durations.get("generate_draft_answer", 0.0)
+
+                    # 2. Retrieval & Reranking Span
                     retrieval_span = lf_root.start_observation(
                         name="retrieve_and_rerank",
                         input={"query": req.query, "filters": final_state.get("filters", {})},
                         metadata={
+                            "duration_seconds": retrieval_time,
                             "retrieval_quality": final_state.get("retrieval_quality", "sufficient"),
                             "retrieved_total": len(retrieved),
                             "selected_total": len(selected),
@@ -375,6 +393,7 @@ class ChatService:
                     )
                     retrieval_span.update(
                         output={
+                            "latency_sec": retrieval_time,
                             "retrieved_count": len(retrieved),
                             "selected_count": len(selected),
                             "retrieved_preview": [
@@ -407,6 +426,7 @@ class ChatService:
                         name="generate_draft_answer",
                         input={"query": req.query, "context_chunks_passed": len(selected)},
                         metadata={
+                            "duration_seconds": llm_time,
                             "model": settings.LLM_MODEL,
                             "groundedness": final_state.get("groundedness_result"),
                             "usage": {
@@ -419,6 +439,7 @@ class ChatService:
                     gen_span.update(
                         output=final_state.get("draft_answer", ""),
                         metadata={
+                            "latency_sec": llm_time,
                             "prompt_tokens": prompt_tok,
                             "completion_tokens": comp_tok,
                             "total_tokens": tot_tok,
@@ -451,7 +472,12 @@ class ChatService:
                             "answer": answer,
                             "citations_count": len(citations_data),
                             "status": status_val,
-                            "latency_ms": stream_elapsed,
+                            "latency_breakdown": {
+                                "total_sec": round(stream_elapsed / 1000, 2),
+                                "llm_generation_sec": llm_time,
+                                "retrieval_sec": retrieval_time,
+                                "streaming_overhead_sec": round(max(0, (stream_elapsed / 1000) - llm_time - retrieval_time), 2),
+                            },
                             "chunks_retrieved": len(retrieved),
                             "chunks_selected": len(selected),
                             "tokens": {

@@ -1,3 +1,4 @@
+import time
 from typing import Dict, Any
 from app.workflows.graph_state import RAGState
 from app.config.database import async_session_factory
@@ -8,9 +9,14 @@ async def retrieve_candidates_node(state: RAGState) -> Dict[str, Any]:
     query = state.get("original_query", "")
     filters = state.get("filters", {})
 
+    t0 = time.time()
     async with async_session_factory() as session:
         retriever = HybridRetriever(session)
         results = await retriever.retrieve(query=query, filters=filters)
+    retrieval_duration = round(time.time() - t0, 3)
+
+    existing_durations = dict(state.get("node_durations") or {})
+    existing_durations["retrieve_candidates"] = retrieval_duration
 
     return {
         "retrieved_candidates": [
