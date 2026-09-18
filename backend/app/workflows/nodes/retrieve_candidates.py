@@ -8,7 +8,8 @@ from app.retrieval.hybrid_retriever import HybridRetriever
 async def retrieve_candidates_node(state: RAGState) -> Dict[str, Any]:
     query = state.get("original_query", "")
     filters = state.get("filters", {})
-    lf_root = state.get("_lf_root")
+    from app.config.langfuse import active_observation_ctx
+    lf_root = active_observation_ctx.get() or state.get("_lf_root")
 
     span = None
     if lf_root:

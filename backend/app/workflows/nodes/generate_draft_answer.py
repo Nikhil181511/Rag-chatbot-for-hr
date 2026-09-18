@@ -50,7 +50,8 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
 
     draft_answer = ""
     api_key = settings.effective_llm_key
-    lf_root = state.get("_lf_root")
+    from app.config.langfuse import active_observation_ctx
+    lf_root = active_observation_ctx.get() or state.get("_lf_root")
 
     import time
     llm_start = time.time()

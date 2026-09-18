@@ -1,10 +1,14 @@
-from typing import Optional
+import contextvars
+from typing import Optional, Any
 from app.config.settings import settings
 from app.config.logging import get_logger
 
 logger = get_logger(__name__)
 
 _langfuse_client = None
+active_observation_ctx: contextvars.ContextVar[Optional[Any]] = contextvars.ContextVar(
+    "active_observation_ctx", default=None
+)
 
 
 def get_langfuse():

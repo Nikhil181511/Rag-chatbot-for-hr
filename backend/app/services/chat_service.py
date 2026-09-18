@@ -67,6 +67,7 @@ class ChatService:
         from app.config.langfuse import get_langfuse
         lf = get_langfuse()
         lf_root = None
+        token = None
         if lf:
             try:
                 lf_root = lf.start_observation(
@@ -80,11 +81,18 @@ class ChatService:
                         "embedding_model": settings.EMBEDDING_MODEL,
                     },
                 )
+                from app.config.langfuse import active_observation_ctx
+                token = active_observation_ctx.set(lf_root)
             except Exception as e:
                 logger.warning("Langfuse trace creation failed", error=str(e))
 
         initial_state["_lf_root"] = lf_root
-        final_state = await rag_app.ainvoke(initial_state)
+        try:
+            final_state = await rag_app.ainvoke(initial_state)
+        finally:
+            if token:
+                from app.config.langfuse import active_observation_ctx
+                active_observation_ctx.reset(token)
 
         total_latency_ms = int((time.time() - start_time) * 1000)
         answer = final_state.get("final_answer", "")
@@ -324,9 +332,10 @@ class ChatService:
                 "conversation_history": formatted_history,
             }
 
-            from app.config.langfuse import get_langfuse
+            from app.config.langfuse import get_langfuse, active_observation_ctx
             lf = get_langfuse()
             lf_root = None
+            token = None
             if lf:
                 try:
                     lf_root = lf.start_observation(
@@ -341,11 +350,15 @@ class ChatService:
                             "stream": True,
                         },
                     )
+                    token = active_observation_ctx.set(lf_root)
                 except Exception as e:
                     logger.warning("Langfuse stream trace creation failed", error=str(e))
 
-            initial_state["_lf_root"] = lf_root
-            final_state = await rag_app.ainvoke(initial_state)
+            try:
+                final_state = await rag_app.ainvoke(initial_state)
+            finally:
+                if token:
+                    active_observation_ctx.reset(token)
 
             if _active_cancellations.get(request_id):
                 return
