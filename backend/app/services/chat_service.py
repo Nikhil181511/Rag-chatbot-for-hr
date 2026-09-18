@@ -66,20 +66,19 @@ class ChatService:
 
         from app.config.langfuse import get_langfuse
         lf = get_langfuse()
-        lf_trace = None
+        lf_root = None
         if lf:
             try:
-                lf_trace = lf.trace(
-                    id=trace_id,
+                lf_root = lf.start_observation(
                     name="hr-rag-chat",
-                    session_id=str(conversation.id),
                     input={"query": req.query, "history_len": len(formatted_history)},
                     metadata={
+                        "request_id": request_id,
+                        "session_id": str(conversation.id),
                         "llm_model": settings.LLM_MODEL,
                         "reranker": req.reranker or settings.RERANKER_PROVIDER,
                         "embedding_model": settings.EMBEDDING_MODEL,
                     },
-                    tags=["rag", settings.APP_ENV],
                 )
             except Exception as e:
                 logger.warning("Langfuse trace creation failed", error=str(e))
@@ -93,33 +92,36 @@ class ChatService:
         citations_data = final_state.get("citations", [])
 
         # Send trace output to Langfuse
-        if lf_trace:
+        if lf_root:
             try:
                 # Log retrieval span
                 retrieved = final_state.get("retrieved_candidates", [])
                 selected = final_state.get("selected_context", [])
-                lf_trace.span(
+                retrieval_span = lf_root.start_observation(
                     name="retrieve_and_rerank",
                     input={"query": req.query, "filters": final_state.get("filters", {})},
+                    metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                )
+                retrieval_span.update(
                     output={
                         "retrieved_count": len(retrieved),
                         "selected_count": len(selected),
                         "selected_docs": [c.get("document_name") for c in selected],
-                    },
-                    metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                    }
                 )
+                retrieval_span.end()
 
                 # Log LLM generation
-                lf_trace.generation(
+                gen_span = lf_root.start_observation(
                     name="generate_draft_answer",
-                    model=settings.LLM_MODEL,
                     input={"query": req.query, "context_chunks": len(selected)},
-                    output=final_state.get("draft_answer", ""),
-                    metadata={"groundedness": final_state.get("groundedness_result")},
+                    metadata={"model": settings.LLM_MODEL, "groundedness": final_state.get("groundedness_result")},
                 )
+                gen_span.update(output=final_state.get("draft_answer", ""))
+                gen_span.end()
 
                 # Update root trace
-                lf_trace.update(
+                lf_root.update(
                     output={
                         "answer": answer,
                         "citations_count": len(citations_data),
@@ -129,6 +131,7 @@ class ChatService:
                         "guardrail": final_state.get("guardrail_result"),
                     },
                 )
+                lf_root.end()
                 lf.flush()
             except Exception as e:
                 logger.warning("Failed to record Langfuse span", error=str(e))
@@ -227,21 +230,20 @@ class ChatService:
 
             from app.config.langfuse import get_langfuse
             lf = get_langfuse()
-            lf_trace = None
+            lf_root = None
             if lf:
                 try:
-                    lf_trace = lf.trace(
-                        id=trace_id,
+                    lf_root = lf.start_observation(
                         name="hr-rag-chat-stream",
-                        session_id=str(conversation.id),
                         input={"query": req.query, "history_len": len(formatted_history)},
                         metadata={
+                            "request_id": request_id,
+                            "session_id": str(conversation.id),
                             "llm_model": settings.LLM_MODEL,
                             "reranker": req.reranker or settings.RERANKER_PROVIDER,
                             "embedding_model": settings.EMBEDDING_MODEL,
                             "stream": True,
                         },
-                        tags=["rag", "streaming", settings.APP_ENV],
                     )
                 except Exception as e:
                     logger.warning("Langfuse stream trace creation failed", error=str(e))
@@ -255,28 +257,33 @@ class ChatService:
             answer = final_state.get("final_answer", "")
             citations_data = final_state.get("citations", [])
 
-            if lf_trace:
+            if lf_root:
                 try:
                     retrieved = final_state.get("retrieved_candidates", [])
                     selected = final_state.get("selected_context", [])
-                    lf_trace.span(
+                    retrieval_span = lf_root.start_observation(
                         name="retrieve_and_rerank",
                         input={"query": req.query, "filters": final_state.get("filters", {})},
+                        metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                    )
+                    retrieval_span.update(
                         output={
                             "retrieved_count": len(retrieved),
                             "selected_count": len(selected),
                             "selected_docs": [c.get("document_name") for c in selected],
-                        },
-                        metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                        }
                     )
-                    lf_trace.generation(
+                    retrieval_span.end()
+
+                    gen_span = lf_root.start_observation(
                         name="generate_draft_answer",
-                        model=settings.LLM_MODEL,
                         input={"query": req.query, "context_chunks": len(selected)},
-                        output=final_state.get("draft_answer", ""),
-                        metadata={"groundedness": final_state.get("groundedness_result")},
+                        metadata={"model": settings.LLM_MODEL, "groundedness": final_state.get("groundedness_result")},
                     )
-                    lf_trace.update(
+                    gen_span.update(output=final_state.get("draft_answer", ""))
+                    gen_span.end()
+
+                    lf_root.update(
                         output={
                             "answer": answer,
                             "citations_count": len(citations_data),
@@ -286,6 +293,7 @@ class ChatService:
                             "guardrail": final_state.get("guardrail_result"),
                         },
                     )
+                    lf_root.end()
                     lf.flush()
                 except Exception as e:
                     logger.warning("Failed to record Langfuse stream span", error=str(e))
