@@ -50,9 +50,21 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
 
     draft_answer = ""
     api_key = settings.effective_llm_key
+    lf_root = state.get("_lf_root")
 
     import time
     llm_start = time.time()
+
+    span = None
+    if lf_root:
+        try:
+            span = lf_root.start_observation(
+                name="generate_draft_answer",
+                input={"query": query, "context_chunks_count": len(context_chunks)},
+                metadata={"model": settings.LLM_MODEL},
+            )
+        except Exception:
+            pass
 
     if api_key:
         try:
@@ -98,6 +110,22 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
         total_tokens = prompt_tokens + completion_tokens
 
     llm_duration = round(time.time() - llm_start, 3)
+
+    if span:
+        try:
+            span.update(
+                output=draft_answer,
+                metadata={
+                    "duration_seconds": llm_duration,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                },
+            )
+            span.end()
+        except Exception:
+            pass
+
     existing_durations = dict(state.get("node_durations") or {})
     existing_durations["generate_draft_answer"] = llm_duration
 

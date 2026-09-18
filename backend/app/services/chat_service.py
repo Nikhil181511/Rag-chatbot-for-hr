@@ -83,6 +83,7 @@ class ChatService:
             except Exception as e:
                 logger.warning("Langfuse trace creation failed", error=str(e))
 
+        initial_state["_lf_root"] = lf_root
         final_state = await rag_app.ainvoke(initial_state)
 
         total_latency_ms = int((time.time() - start_time) * 1000)
@@ -343,6 +344,7 @@ class ChatService:
                 except Exception as e:
                     logger.warning("Langfuse stream trace creation failed", error=str(e))
 
+            initial_state["_lf_root"] = lf_root
             final_state = await rag_app.ainvoke(initial_state)
 
             if _active_cancellations.get(request_id):
@@ -354,118 +356,15 @@ class ChatService:
 
             if lf_root:
                 try:
+                    durations = final_state.get("node_durations", {})
+                    retrieval_time = durations.get("retrieve_candidates", 0.0)
+                    llm_time = durations.get("generate_draft_answer", 0.0)
                     retrieved = final_state.get("retrieved_candidates", [])
                     selected = final_state.get("selected_context", [])
                     prompt_tok = final_state.get("prompt_tokens", 0)
                     comp_tok = final_state.get("completion_tokens", 0)
                     tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
 
-                    # 1. Intent & Routing Span
-                    intent_span = lf_root.start_observation(
-                        name="classify_intent",
-                        input={"query": req.query},
-                        metadata={"intent": final_state.get("intent"), "domain": final_state.get("domain")},
-                    )
-                    intent_span.update(
-                        output={
-                            "intent": final_state.get("intent"),
-                            "domain": final_state.get("domain"),
-                            "filters": final_state.get("filters", {}),
-                        }
-                    )
-                    intent_span.end()
-
-                    durations = final_state.get("node_durations", {})
-                    retrieval_time = durations.get("retrieve_candidates", 0.0)
-                    llm_time = durations.get("generate_draft_answer", 0.0)
-
-                    # 2. Retrieval & Reranking Span
-                    retrieval_span = lf_root.start_observation(
-                        name="retrieve_and_rerank",
-                        input={"query": req.query, "filters": final_state.get("filters", {})},
-                        metadata={
-                            "duration_seconds": retrieval_time,
-                            "retrieval_quality": final_state.get("retrieval_quality", "sufficient"),
-                            "retrieved_total": len(retrieved),
-                            "selected_total": len(selected),
-                            "reranker_used": req.reranker or settings.RERANKER_PROVIDER,
-                        },
-                    )
-                    retrieval_span.update(
-                        output={
-                            "latency_sec": retrieval_time,
-                            "retrieved_count": len(retrieved),
-                            "selected_count": len(selected),
-                            "retrieved_preview": [
-                                {
-                                    "chunk_id": str(c.get("chunk_id")),
-                                    "doc": c.get("document_name"),
-                                    "score": round(float(c.get("score", 0)), 4),
-                                    "section": c.get("section"),
-                                    "source": c.get("source"),
-                                }
-                                for c in retrieved[:15]
-                            ],
-                            "selected_final_chunks": [
-                                {
-                                    "chunk_id": str(c.get("chunk_id")),
-                                    "doc": c.get("document_name"),
-                                    "section": c.get("section"),
-                                    "page": c.get("page_number"),
-                                    "tokens": c.get("token_count"),
-                                    "content_preview": c.get("content", "")[:120] + "...",
-                                }
-                                for c in selected
-                            ],
-                        }
-                    )
-                    retrieval_span.end()
-
-                    # 3. LLM Generation Span
-                    gen_span = lf_root.start_observation(
-                        name="generate_draft_answer",
-                        input={"query": req.query, "context_chunks_passed": len(selected)},
-                        metadata={
-                            "duration_seconds": llm_time,
-                            "model": settings.LLM_MODEL,
-                            "groundedness": final_state.get("groundedness_result"),
-                            "usage": {
-                                "prompt_tokens": prompt_tok,
-                                "completion_tokens": comp_tok,
-                                "total_tokens": tot_tok,
-                            },
-                        },
-                    )
-                    gen_span.update(
-                        output=final_state.get("draft_answer", ""),
-                        metadata={
-                            "latency_sec": llm_time,
-                            "prompt_tokens": prompt_tok,
-                            "completion_tokens": comp_tok,
-                            "total_tokens": tot_tok,
-                        },
-                    )
-                    gen_span.end()
-
-                    # 4. Guardrails & Validation Span
-                    guard_span = lf_root.start_observation(
-                        name="validate_and_guardrails",
-                        input={"draft_answer_length": len(final_state.get("draft_answer", ""))},
-                        metadata={
-                            "groundedness": final_state.get("groundedness_result"),
-                            "guardrail_result": final_state.get("guardrail_result"),
-                        },
-                    )
-                    guard_span.update(
-                        output={
-                            "groundedness": final_state.get("groundedness_result"),
-                            "guardrail": final_state.get("guardrail_result"),
-                            "status": status_val,
-                        }
-                    )
-                    guard_span.end()
-
-                    # 5. Update Root Trace
                     stream_elapsed = int((time.time() - start_time) * 1000)
                     lf_root.update(
                         output={

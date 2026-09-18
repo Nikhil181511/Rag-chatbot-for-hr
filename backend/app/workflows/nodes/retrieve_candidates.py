@@ -8,12 +8,39 @@ from app.retrieval.hybrid_retriever import HybridRetriever
 async def retrieve_candidates_node(state: RAGState) -> Dict[str, Any]:
     query = state.get("original_query", "")
     filters = state.get("filters", {})
+    lf_root = state.get("_lf_root")
+
+    span = None
+    if lf_root:
+        try:
+            span = lf_root.start_observation(
+                name="retrieve_and_rerank",
+                input={"query": query, "filters": filters},
+            )
+        except Exception:
+            pass
 
     t0 = time.time()
     async with async_session_factory() as session:
         retriever = HybridRetriever(session)
         results = await retriever.retrieve(query=query, filters=filters)
     retrieval_duration = round(time.time() - t0, 3)
+
+    retrieved = results.get("dense", []) + results.get("sparse", [])
+
+    if span:
+        try:
+            span.update(
+                output={
+                    "retrieved_count": len(retrieved),
+                    "dense_count": len(results.get("dense", [])),
+                    "sparse_count": len(results.get("sparse", [])),
+                },
+                metadata={"latency_sec": retrieval_duration},
+            )
+            span.end()
+        except Exception:
+            pass
 
     existing_durations = dict(state.get("node_durations") or {})
     existing_durations["retrieve_candidates"] = retrieval_duration
