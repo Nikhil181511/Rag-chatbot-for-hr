@@ -112,12 +112,31 @@ class ChatService:
                 retrieval_span.end()
 
                 # Log LLM generation
+                prompt_tok = final_state.get("prompt_tokens", 0)
+                comp_tok = final_state.get("completion_tokens", 0)
+                tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
+
                 gen_span = lf_root.start_observation(
                     name="generate_draft_answer",
                     input={"query": req.query, "context_chunks": len(selected)},
-                    metadata={"model": settings.LLM_MODEL, "groundedness": final_state.get("groundedness_result")},
+                    metadata={
+                        "model": settings.LLM_MODEL,
+                        "groundedness": final_state.get("groundedness_result"),
+                        "usage": {
+                            "prompt_tokens": prompt_tok,
+                            "completion_tokens": comp_tok,
+                            "total_tokens": tot_tok,
+                        },
+                    },
                 )
-                gen_span.update(output=final_state.get("draft_answer", ""))
+                gen_span.update(
+                    output=final_state.get("draft_answer", ""),
+                    metadata={
+                        "prompt_tokens": prompt_tok,
+                        "completion_tokens": comp_tok,
+                        "total_tokens": tot_tok,
+                    },
+                )
                 gen_span.end()
 
                 # Update root trace
@@ -129,6 +148,11 @@ class ChatService:
                         "intent": final_state.get("intent"),
                         "groundedness": final_state.get("groundedness_result"),
                         "guardrail": final_state.get("guardrail_result"),
+                        "tokens": {
+                            "prompt_tokens": prompt_tok,
+                            "completion_tokens": comp_tok,
+                            "total_tokens": tot_tok,
+                        },
                     },
                 )
                 lf_root.end()
@@ -275,12 +299,31 @@ class ChatService:
                     )
                     retrieval_span.end()
 
+                    prompt_tok = final_state.get("prompt_tokens", 0)
+                    comp_tok = final_state.get("completion_tokens", 0)
+                    tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
+
                     gen_span = lf_root.start_observation(
                         name="generate_draft_answer",
                         input={"query": req.query, "context_chunks": len(selected)},
-                        metadata={"model": settings.LLM_MODEL, "groundedness": final_state.get("groundedness_result")},
+                        metadata={
+                            "model": settings.LLM_MODEL,
+                            "groundedness": final_state.get("groundedness_result"),
+                            "usage": {
+                                "prompt_tokens": prompt_tok,
+                                "completion_tokens": comp_tok,
+                                "total_tokens": tot_tok,
+                            },
+                        },
                     )
-                    gen_span.update(output=final_state.get("draft_answer", ""))
+                    gen_span.update(
+                        output=final_state.get("draft_answer", ""),
+                        metadata={
+                            "prompt_tokens": prompt_tok,
+                            "completion_tokens": comp_tok,
+                            "total_tokens": tot_tok,
+                        },
+                    )
                     gen_span.end()
 
                     lf_root.update(
@@ -291,6 +334,11 @@ class ChatService:
                             "intent": final_state.get("intent"),
                             "groundedness": final_state.get("groundedness_result"),
                             "guardrail": final_state.get("guardrail_result"),
+                            "tokens": {
+                                "prompt_tokens": prompt_tok,
+                                "completion_tokens": comp_tok,
+                                "total_tokens": tot_tok,
+                            },
                         },
                     )
                     lf_root.end()

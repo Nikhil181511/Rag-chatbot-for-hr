@@ -34,6 +34,9 @@ class RAGState(TypedDict, total=False):
     groundedness_result: str  # "grounded" | "hallucination" | "abstention"
     guardrail_result: str     # "passed" | "redacted" | "blocked"
     retry_count: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
     
     # Final Output
     final_answer: str
