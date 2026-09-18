@@ -16,7 +16,7 @@ class EmbeddingFactory:
             if provider_type == "gemini":
                 cls._instance = GeminiEmbeddingProvider(
                     api_key=settings.effective_llm_key,
-                    model="gemini-embedding-002",
+                    model=settings.EMBEDDING_MODEL or "gemini-embedding-001",
                     dimension=settings.EMBEDDING_DIMENSION,
                 )
             elif provider_type == "huggingface":
@@ -28,7 +28,7 @@ class EmbeddingFactory:
                     # Automatically use Gemini embeddings when Gemini is configured
                     cls._instance = GeminiEmbeddingProvider(
                         api_key=settings.effective_llm_key,
-                        model="gemini-embedding-002",
+                        model=settings.EMBEDDING_MODEL or "gemini-embedding-001",
                         dimension=settings.EMBEDDING_DIMENSION,
                     )
                 else:

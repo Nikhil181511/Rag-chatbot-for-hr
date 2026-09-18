@@ -64,6 +64,26 @@ class ChatService:
             "conversation_history": formatted_history,
         }
 
+        from app.config.langfuse import get_langfuse
+        lf = get_langfuse()
+        lf_trace = None
+        if lf:
+            try:
+                lf_trace = lf.trace(
+                    id=trace_id,
+                    name="hr-rag-chat",
+                    session_id=str(conversation.id),
+                    input={"query": req.query, "history_len": len(formatted_history)},
+                    metadata={
+                        "llm_model": settings.LLM_MODEL,
+                        "reranker": req.reranker or settings.RERANKER_PROVIDER,
+                        "embedding_model": settings.EMBEDDING_MODEL,
+                    },
+                    tags=["rag", settings.APP_ENV],
+                )
+            except Exception as e:
+                logger.warning("Langfuse trace creation failed", error=str(e))
+
         final_state = await rag_app.ainvoke(initial_state)
 
         total_latency_ms = int((time.time() - start_time) * 1000)
@@ -71,6 +91,47 @@ class ChatService:
         status_val = final_state.get("final_answer_status", "SUCCESS")
         is_abstention = (status_val == "ABSTENTION")
         citations_data = final_state.get("citations", [])
+
+        # Send trace output to Langfuse
+        if lf_trace:
+            try:
+                # Log retrieval span
+                retrieved = final_state.get("retrieved_candidates", [])
+                selected = final_state.get("selected_context", [])
+                lf_trace.span(
+                    name="retrieve_and_rerank",
+                    input={"query": req.query, "filters": final_state.get("filters", {})},
+                    output={
+                        "retrieved_count": len(retrieved),
+                        "selected_count": len(selected),
+                        "selected_docs": [c.get("document_name") for c in selected],
+                    },
+                    metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                )
+
+                # Log LLM generation
+                lf_trace.generation(
+                    name="generate_draft_answer",
+                    model=settings.LLM_MODEL,
+                    input={"query": req.query, "context_chunks": len(selected)},
+                    output=final_state.get("draft_answer", ""),
+                    metadata={"groundedness": final_state.get("groundedness_result")},
+                )
+
+                # Update root trace
+                lf_trace.update(
+                    output={
+                        "answer": answer,
+                        "citations_count": len(citations_data),
+                        "status": status_val,
+                        "intent": final_state.get("intent"),
+                        "groundedness": final_state.get("groundedness_result"),
+                        "guardrail": final_state.get("guardrail_result"),
+                    },
+                )
+                lf.flush()
+            except Exception as e:
+                logger.warning("Failed to record Langfuse span", error=str(e))
 
         # 5. Persist RAG Run record
         rag_run = await self.rag_run_repo.create_rag_run(
@@ -164,6 +225,27 @@ class ChatService:
                 "conversation_history": formatted_history,
             }
 
+            from app.config.langfuse import get_langfuse
+            lf = get_langfuse()
+            lf_trace = None
+            if lf:
+                try:
+                    lf_trace = lf.trace(
+                        id=trace_id,
+                        name="hr-rag-chat-stream",
+                        session_id=str(conversation.id),
+                        input={"query": req.query, "history_len": len(formatted_history)},
+                        metadata={
+                            "llm_model": settings.LLM_MODEL,
+                            "reranker": req.reranker or settings.RERANKER_PROVIDER,
+                            "embedding_model": settings.EMBEDDING_MODEL,
+                            "stream": True,
+                        },
+                        tags=["rag", "streaming", settings.APP_ENV],
+                    )
+                except Exception as e:
+                    logger.warning("Langfuse stream trace creation failed", error=str(e))
+
             final_state = await rag_app.ainvoke(initial_state)
 
             if _active_cancellations.get(request_id):
@@ -172,6 +254,41 @@ class ChatService:
             status_val = final_state.get("final_answer_status", "SUCCESS")
             answer = final_state.get("final_answer", "")
             citations_data = final_state.get("citations", [])
+
+            if lf_trace:
+                try:
+                    retrieved = final_state.get("retrieved_candidates", [])
+                    selected = final_state.get("selected_context", [])
+                    lf_trace.span(
+                        name="retrieve_and_rerank",
+                        input={"query": req.query, "filters": final_state.get("filters", {})},
+                        output={
+                            "retrieved_count": len(retrieved),
+                            "selected_count": len(selected),
+                            "selected_docs": [c.get("document_name") for c in selected],
+                        },
+                        metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                    )
+                    lf_trace.generation(
+                        name="generate_draft_answer",
+                        model=settings.LLM_MODEL,
+                        input={"query": req.query, "context_chunks": len(selected)},
+                        output=final_state.get("draft_answer", ""),
+                        metadata={"groundedness": final_state.get("groundedness_result")},
+                    )
+                    lf_trace.update(
+                        output={
+                            "answer": answer,
+                            "citations_count": len(citations_data),
+                            "status": status_val,
+                            "intent": final_state.get("intent"),
+                            "groundedness": final_state.get("groundedness_result"),
+                            "guardrail": final_state.get("guardrail_result"),
+                        },
+                    )
+                    lf.flush()
+                except Exception as e:
+                    logger.warning("Failed to record Langfuse stream span", error=str(e))
 
             if status_val == "ABSTENTION":
                 yield f"data: {json.dumps({'type': 'abstention', 'request_id': request_id, 'message': answer, 'reason': 'insufficient_context'})}\n\n"

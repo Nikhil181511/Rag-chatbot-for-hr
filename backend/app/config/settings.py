@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # Embedding Settings
     EMBEDDING_PROVIDER: Literal["openai", "gemini", "huggingface", "azure_openai"] = "openai"
-    EMBEDDING_MODEL: str = "gemini-embedding-002"
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
     EMBEDDING_DIMENSION: int = 1536
 
     # Reranker Settings
@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     LANGSMITH_TRACING: bool = False
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_PROJECT: str = "hr-rag-chatbot"
+
+    # Langfuse Observability
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_BASE_URL: str = "https://us.cloud.langfuse.com"
 
     # MCP Server
     MCP_ENABLED: bool = False
