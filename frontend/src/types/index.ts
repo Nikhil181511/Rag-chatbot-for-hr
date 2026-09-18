@@ -19,6 +19,8 @@ export interface Message {
   isAbstention?: boolean;
   error?: string;
   createdAt: string;
+  latencyMs?: number;
+  chunksUsed?: number;
 }
 
 export interface Conversation {

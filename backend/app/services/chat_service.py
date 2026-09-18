@@ -91,34 +91,74 @@ class ChatService:
         is_abstention = (status_val == "ABSTENTION")
         citations_data = final_state.get("citations", [])
 
-        # Send trace output to Langfuse
+        # Send trace output to Langfuse with complete end-to-end telemetry
         if lf_root:
             try:
-                # Log retrieval span
                 retrieved = final_state.get("retrieved_candidates", [])
                 selected = final_state.get("selected_context", [])
+                prompt_tok = final_state.get("prompt_tokens", 0)
+                comp_tok = final_state.get("completion_tokens", 0)
+                tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
+
+                # 1. Intent & Routing Span
+                intent_span = lf_root.start_observation(
+                    name="classify_intent",
+                    input={"query": req.query},
+                    metadata={"intent": final_state.get("intent"), "domain": final_state.get("domain")},
+                )
+                intent_span.update(
+                    output={
+                        "intent": final_state.get("intent"),
+                        "domain": final_state.get("domain"),
+                        "filters": final_state.get("filters", {}),
+                    }
+                )
+                intent_span.end()
+
+                # 2. Retrieval & Reranking Span (with all candidate chunks reviewed vs selected)
                 retrieval_span = lf_root.start_observation(
                     name="retrieve_and_rerank",
                     input={"query": req.query, "filters": final_state.get("filters", {})},
-                    metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                    metadata={
+                        "retrieval_quality": final_state.get("retrieval_quality", "sufficient"),
+                        "retrieved_total": len(retrieved),
+                        "selected_total": len(selected),
+                        "reranker_used": req.reranker or settings.RERANKER_PROVIDER,
+                    },
                 )
                 retrieval_span.update(
                     output={
                         "retrieved_count": len(retrieved),
                         "selected_count": len(selected),
-                        "selected_docs": [c.get("document_name") for c in selected],
+                        "retrieved_preview": [
+                            {
+                                "chunk_id": str(c.get("chunk_id")),
+                                "doc": c.get("document_name"),
+                                "score": round(float(c.get("score", 0)), 4),
+                                "section": c.get("section"),
+                                "source": c.get("source"),
+                            }
+                            for c in retrieved[:15]
+                        ],
+                        "selected_final_chunks": [
+                            {
+                                "chunk_id": str(c.get("chunk_id")),
+                                "doc": c.get("document_name"),
+                                "section": c.get("section"),
+                                "page": c.get("page_number"),
+                                "tokens": c.get("token_count"),
+                                "content_preview": c.get("content", "")[:120] + "...",
+                            }
+                            for c in selected
+                        ],
                     }
                 )
                 retrieval_span.end()
 
-                # Log LLM generation
-                prompt_tok = final_state.get("prompt_tokens", 0)
-                comp_tok = final_state.get("completion_tokens", 0)
-                tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
-
+                # 3. LLM Generation Span
                 gen_span = lf_root.start_observation(
                     name="generate_draft_answer",
-                    input={"query": req.query, "context_chunks": len(selected)},
+                    input={"query": req.query, "context_chunks_passed": len(selected)},
                     metadata={
                         "model": settings.LLM_MODEL,
                         "groundedness": final_state.get("groundedness_result"),
@@ -139,15 +179,33 @@ class ChatService:
                 )
                 gen_span.end()
 
-                # Update root trace
+                # 4. Guardrails & Validation Span
+                guard_span = lf_root.start_observation(
+                    name="validate_and_guardrails",
+                    input={"draft_answer_length": len(final_state.get("draft_answer", ""))},
+                    metadata={
+                        "groundedness": final_state.get("groundedness_result"),
+                        "guardrail_result": final_state.get("guardrail_result"),
+                    },
+                )
+                guard_span.update(
+                    output={
+                        "groundedness": final_state.get("groundedness_result"),
+                        "guardrail": final_state.get("guardrail_result"),
+                        "status": status_val,
+                    }
+                )
+                guard_span.end()
+
+                # 5. Update Root Trace
                 lf_root.update(
                     output={
                         "answer": answer,
                         "citations_count": len(citations_data),
                         "status": status_val,
-                        "intent": final_state.get("intent"),
-                        "groundedness": final_state.get("groundedness_result"),
-                        "guardrail": final_state.get("guardrail_result"),
+                        "latency_ms": total_latency_ms,
+                        "chunks_retrieved": len(retrieved),
+                        "chunks_selected": len(selected),
                         "tokens": {
                             "prompt_tokens": prompt_tok,
                             "completion_tokens": comp_tok,
@@ -285,27 +343,69 @@ class ChatService:
                 try:
                     retrieved = final_state.get("retrieved_candidates", [])
                     selected = final_state.get("selected_context", [])
+                    prompt_tok = final_state.get("prompt_tokens", 0)
+                    comp_tok = final_state.get("completion_tokens", 0)
+                    tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
+
+                    # 1. Intent & Routing Span
+                    intent_span = lf_root.start_observation(
+                        name="classify_intent",
+                        input={"query": req.query},
+                        metadata={"intent": final_state.get("intent"), "domain": final_state.get("domain")},
+                    )
+                    intent_span.update(
+                        output={
+                            "intent": final_state.get("intent"),
+                            "domain": final_state.get("domain"),
+                            "filters": final_state.get("filters", {}),
+                        }
+                    )
+                    intent_span.end()
+
+                    # 2. Retrieval & Reranking Span (with all candidate chunks reviewed vs selected)
                     retrieval_span = lf_root.start_observation(
                         name="retrieve_and_rerank",
                         input={"query": req.query, "filters": final_state.get("filters", {})},
-                        metadata={"retrieval_quality": final_state.get("retrieval_quality", "sufficient")},
+                        metadata={
+                            "retrieval_quality": final_state.get("retrieval_quality", "sufficient"),
+                            "retrieved_total": len(retrieved),
+                            "selected_total": len(selected),
+                            "reranker_used": req.reranker or settings.RERANKER_PROVIDER,
+                        },
                     )
                     retrieval_span.update(
                         output={
                             "retrieved_count": len(retrieved),
                             "selected_count": len(selected),
-                            "selected_docs": [c.get("document_name") for c in selected],
+                            "retrieved_preview": [
+                                {
+                                    "chunk_id": str(c.get("chunk_id")),
+                                    "doc": c.get("document_name"),
+                                    "score": round(float(c.get("score", 0)), 4),
+                                    "section": c.get("section"),
+                                    "source": c.get("source"),
+                                }
+                                for c in retrieved[:15]
+                            ],
+                            "selected_final_chunks": [
+                                {
+                                    "chunk_id": str(c.get("chunk_id")),
+                                    "doc": c.get("document_name"),
+                                    "section": c.get("section"),
+                                    "page": c.get("page_number"),
+                                    "tokens": c.get("token_count"),
+                                    "content_preview": c.get("content", "")[:120] + "...",
+                                }
+                                for c in selected
+                            ],
                         }
                     )
                     retrieval_span.end()
 
-                    prompt_tok = final_state.get("prompt_tokens", 0)
-                    comp_tok = final_state.get("completion_tokens", 0)
-                    tot_tok = final_state.get("total_tokens", prompt_tok + comp_tok)
-
+                    # 3. LLM Generation Span
                     gen_span = lf_root.start_observation(
                         name="generate_draft_answer",
-                        input={"query": req.query, "context_chunks": len(selected)},
+                        input={"query": req.query, "context_chunks_passed": len(selected)},
                         metadata={
                             "model": settings.LLM_MODEL,
                             "groundedness": final_state.get("groundedness_result"),
@@ -326,14 +426,34 @@ class ChatService:
                     )
                     gen_span.end()
 
+                    # 4. Guardrails & Validation Span
+                    guard_span = lf_root.start_observation(
+                        name="validate_and_guardrails",
+                        input={"draft_answer_length": len(final_state.get("draft_answer", ""))},
+                        metadata={
+                            "groundedness": final_state.get("groundedness_result"),
+                            "guardrail_result": final_state.get("guardrail_result"),
+                        },
+                    )
+                    guard_span.update(
+                        output={
+                            "groundedness": final_state.get("groundedness_result"),
+                            "guardrail": final_state.get("guardrail_result"),
+                            "status": status_val,
+                        }
+                    )
+                    guard_span.end()
+
+                    # 5. Update Root Trace
+                    stream_elapsed = int((time.time() - start_time) * 1000)
                     lf_root.update(
                         output={
                             "answer": answer,
                             "citations_count": len(citations_data),
                             "status": status_val,
-                            "intent": final_state.get("intent"),
-                            "groundedness": final_state.get("groundedness_result"),
-                            "guardrail": final_state.get("guardrail_result"),
+                            "latency_ms": stream_elapsed,
+                            "chunks_retrieved": len(retrieved),
+                            "chunks_selected": len(selected),
                             "tokens": {
                                 "prompt_tokens": prompt_tok,
                                 "completion_tokens": comp_tok,

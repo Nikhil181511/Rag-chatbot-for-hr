@@ -62,11 +62,11 @@ export function useChat() {
               )
             );
           },
-          onDone: () => {
+          onDone: (latencyMs?: number) => {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
-                  ? { ...msg, isStreaming: false }
+                  ? { ...msg, isStreaming: false, latencyMs: latencyMs || 0 }
                   : msg
               )
             );
