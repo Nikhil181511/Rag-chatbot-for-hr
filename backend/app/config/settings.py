@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     LANGSMITH_PROJECT: str = "hr-rag-chatbot"
 
     # Langfuse Observability
+    LANGFUSE_ENABLED: bool = True
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_BASE_URL: str = "https://us.cloud.langfuse.com"

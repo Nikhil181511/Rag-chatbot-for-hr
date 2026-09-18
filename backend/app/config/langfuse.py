@@ -12,6 +12,9 @@ def get_langfuse():
     if _langfuse_client is not None:
         return _langfuse_client
 
+    if not settings.LANGFUSE_ENABLED:
+        return None
+
     if not settings.LANGFUSE_PUBLIC_KEY or not settings.LANGFUSE_SECRET_KEY:
         return None
 
