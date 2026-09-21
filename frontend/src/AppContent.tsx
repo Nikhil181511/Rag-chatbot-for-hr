@@ -31,6 +31,7 @@ export const AppContent: React.FC = () => {
   const {
     documents,
     isUploading,
+    error: docError,
     uploadFiles,
     deleteDocument,
   } = useDocuments();
@@ -88,6 +89,7 @@ export const AppContent: React.FC = () => {
         onClose={() => setIsDocModalOpen(false)}
         documents={documents}
         isUploading={isUploading}
+        error={docError}
         onUpload={uploadFiles}
         onDelete={deleteDocument}
       />

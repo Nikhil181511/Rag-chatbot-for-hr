@@ -8,7 +8,8 @@ interface DocumentModalProps {
   onClose: () => void;
   documents: DocumentItem[];
   isUploading: boolean;
-  onUpload: (files: FileList) => void;
+  error?: string | null;
+  onUpload: (files: FileList) => Promise<void> | void;
   onDelete: (id: string) => void;
 }
 
@@ -17,17 +18,28 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
   onClose,
   documents,
   isUploading,
+  error: externalError,
   onUpload,
   onDelete,
 }) => {
   const { isHR } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [localError, setLocalError] = React.useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      onUpload(e.target.files);
+      setLocalError(null);
+      try {
+        await onUpload(e.target.files);
+      } catch (err: any) {
+        setLocalError(err.message || 'Failed to upload document');
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
     }
   };
 
@@ -88,6 +100,32 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({
         </div>
 
         <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Error Banner if upload or operation fails */}
+          {(localError || externalError) && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                background: 'rgba(244, 63, 94, 0.15)',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                color: '#FDA4AF',
+                fontSize: '0.85rem',
+              }}
+            >
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>{localError || externalError}</span>
+              <button
+                onClick={() => setLocalError(null)}
+                style={{ background: 'transparent', border: 'none', color: '#FDA4AF', cursor: 'pointer', fontSize: '14px' }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Upload Dropzone - ONLY VISIBLE TO HR */}
           {isHR ? (
             <div

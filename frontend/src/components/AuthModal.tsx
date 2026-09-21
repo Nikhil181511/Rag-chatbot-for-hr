@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, User as UserIcon, Lock, Mail, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
+import { ShieldCheck, User as UserIcon, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface AuthModalProps {
@@ -38,23 +38,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleQuickDemo = async (demoRole: 'hr' | 'employee') => {
-    setError(null);
-    setLoading(true);
-    try {
-      if (demoRole === 'hr') {
-        await login('hr@company.com', 'hr123456');
-      } else {
-        await login('employee@company.com', 'employee123456');
-      }
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed demo login');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-container" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
@@ -83,56 +66,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
           <button className="btn-icon" onClick={onClose}>✕</button>
-        </div>
-
-        {/* Quick Demo Login Bar */}
-        <div style={{
-          padding: '12px 16px',
-          background: 'rgba(99, 102, 241, 0.08)',
-          borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-        }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            ⚡ Quick 1-Click Demo Login
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('hr')}
-              disabled={loading}
-              className="btn-secondary"
-              style={{
-                fontSize: '0.78rem',
-                padding: '6px 8px',
-                justifyContent: 'center',
-                borderColor: 'rgba(244, 63, 94, 0.4)',
-                background: 'rgba(244, 63, 94, 0.08)',
-                color: '#FDA4AF'
-              }}
-            >
-              <UserCheck size={14} />
-              <span>Login as HR Admin</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('employee')}
-              disabled={loading}
-              className="btn-secondary"
-              style={{
-                fontSize: '0.78rem',
-                padding: '6px 8px',
-                justifyContent: 'center',
-                borderColor: 'rgba(6, 182, 212, 0.4)',
-                background: 'rgba(6, 182, 212, 0.08)',
-                color: '#67E8F9'
-              }}
-            >
-              <UserIcon size={14} />
-              <span>Login as Employee</span>
-            </button>
-          </div>
         </div>
 
         {/* Form Body */}
