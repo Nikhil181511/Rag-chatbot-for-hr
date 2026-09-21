@@ -35,6 +35,8 @@ dependencies = [
     "tenacity>=8.3.0",
     "langsmith>=0.1.56",
     "langfuse>=2.0.0",
+    "bcrypt>=4.0.0",
+    "pyjwt>=2.8.0",
 ]
 
 [project.optional-dependencies]

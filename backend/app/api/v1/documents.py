@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import get_db
 from app.services.document_service import DocumentService
+from app.api.deps import require_hr, require_employee_or_hr
+from app.models.user import User
 from app.schemas.document import (
     DocumentItem,
     DocumentUploadItem,
@@ -20,6 +22,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 async def upload_documents(
     files: List[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_hr),
 ):
     service = DocumentService(db)
     uploaded_items: List[DocumentUploadItem] = []
@@ -43,6 +46,7 @@ async def list_documents(
     skip: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_employee_or_hr),
 ):
     service = DocumentService(db)
     docs = await service.list_documents(skip=skip, limit=limit)
@@ -109,6 +113,7 @@ async def get_document_status(
 async def delete_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_hr),
 ):
     service = DocumentService(db)
     await service.delete_document(document_id)
@@ -119,6 +124,7 @@ async def delete_document(
 async def reprocess_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_hr),
 ):
     service = DocumentService(db)
     doc = await service.reprocess_document(document_id)
