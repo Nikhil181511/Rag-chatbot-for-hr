@@ -15,6 +15,7 @@ from app.api.v1.chat import router as chat_router
 from app.api.v1.conversations import router as conversations_router
 from app.api.v1.suggestions import router as suggestions_router
 from app.api.v1.knowledge_base import router as knowledge_base_router
+from app.api.v1.auth import router as auth_router
 
 logger = get_logger(__name__)
 
@@ -138,6 +139,7 @@ def create_app() -> FastAPI:
     app.include_router(conversations_router, prefix="/api/v1")
     app.include_router(suggestions_router, prefix="/api/v1")
     app.include_router(knowledge_base_router, prefix="/api/v1")
+    app.include_router(auth_router, prefix="/api/v1")
 
     return app
 

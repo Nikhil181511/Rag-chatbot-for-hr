@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_BASE_URL: str = "https://us.cloud.langfuse.com"
 
+    # Authentication & JWT
+    JWT_SECRET_KEY: str = Field(default="hr-rag-insecure-secret-key-change-in-prod-1234567890", description="Secret key for signing JWT tokens")
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
     # MCP Server
     MCP_ENABLED: bool = False
     MCP_SERVER_HOST: str = "0.0.0.0"
