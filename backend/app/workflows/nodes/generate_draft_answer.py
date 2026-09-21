@@ -50,6 +50,22 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
 
     draft_answer = ""
     api_key = settings.effective_llm_key
+    from app.config.langfuse import active_observation_ctx
+    lf_root = active_observation_ctx.get() or state.get("_lf_root")
+
+    import time
+    llm_start = time.time()
+
+    span = None
+    if lf_root:
+        try:
+            span = lf_root.start_observation(
+                name="generate_draft_answer",
+                input={"query": query, "context_chunks_count": len(context_chunks)},
+                metadata={"model": settings.LLM_MODEL},
+            )
+        except Exception:
+            pass
 
     if api_key:
         try:
@@ -69,9 +85,20 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
                 max_tokens=1000,
             )
             draft_answer = response.choices[0].message.content or ""
+            if response.usage:
+                prompt_tokens = response.usage.prompt_tokens or 0
+                completion_tokens = response.usage.completion_tokens or 0
+                total_tokens = response.usage.total_tokens or (prompt_tokens + completion_tokens)
+            else:
+                prompt_tokens = len(user_prompt) // 4
+                completion_tokens = len(draft_answer) // 4
+                total_tokens = prompt_tokens + completion_tokens
         except Exception as e:
             logger.error("LLM generation failed", exc_info=e)
             draft_answer = f"Based on {context_chunks[0]['document_name']}:\n\n{context_chunks[0]['content'][:300]}..."
+            prompt_tokens = len(user_prompt) // 4
+            completion_tokens = len(draft_answer) // 4
+            total_tokens = prompt_tokens + completion_tokens
     else:
         # Deterministic grounded fallback when running in offline/local test mode
         top_doc = context_chunks[0]
@@ -79,5 +106,34 @@ async def generate_draft_answer_node(state: RAGState) -> Dict[str, Any]:
             f"Based on the **{top_doc['document_name']}** (Section: {top_doc.get('section', 'Policy')}):\n\n"
             f"{top_doc['content'][:400]}..."
         )
+        prompt_tokens = len(user_prompt) // 4
+        completion_tokens = len(draft_answer) // 4
+        total_tokens = prompt_tokens + completion_tokens
 
-    return {"draft_answer": draft_answer}
+    llm_duration = round(time.time() - llm_start, 3)
+
+    if span:
+        try:
+            span.update(
+                output=draft_answer,
+                metadata={
+                    "duration_seconds": llm_duration,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                },
+            )
+            span.end()
+        except Exception:
+            pass
+
+    existing_durations = dict(state.get("node_durations") or {})
+    existing_durations["generate_draft_answer"] = llm_duration
+
+    return {
+        "draft_answer": draft_answer,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "node_durations": existing_durations,
+    }

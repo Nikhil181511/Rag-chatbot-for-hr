@@ -35,6 +35,16 @@ async def lifespan(app: FastAPI):
         await init_tables()
     except Exception as e:
         logger.warning("Could not auto-initialize tables on startup", error=str(e))
+
+    try:
+        from app.config.langfuse import get_langfuse
+        lf = get_langfuse()
+        if lf:
+            logger.info("Langfuse tracing enabled", host=settings.LANGFUSE_BASE_URL)
+        else:
+            logger.info("Langfuse tracing disabled (no keys provided)")
+    except Exception as e:
+        logger.warning("Could not initialize Langfuse on startup", error=str(e))
     yield
     # Shutdown
     logger.info("Application shutting down")

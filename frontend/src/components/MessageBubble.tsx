@@ -82,7 +82,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
 
         {isAssistant && !message.isStreaming && message.content && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+              {message.latencyMs !== undefined && message.latencyMs > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
+                  ⚡ {(message.latencyMs / 1000).toFixed(2)}s
+                </span>
+              )}
+              {message.citations && message.citations.length > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', padding: '2px 6px', borderRadius: '4px' }}>
+                  📚 {message.citations.length} verified {message.citations.length === 1 ? 'source' : 'sources'}
+                </span>
+              )}
+            </div>
+
             <button
               onClick={handleCopy}
               style={{
